@@ -24,9 +24,28 @@ export default function EmployeeManagementSystem() {
     phone: '',
     status: 'active'
   });
+  
+  // Modal states
+  const [showModal, setShowModal] = useState(false);
+  const [modalConfig, setModalConfig] = useState({
+    type: 'success', // 'success', 'error', 'confirm'
+    title: '',
+    message: '',
+    onConfirm: null
+  });
+  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null });
 
   // Sample departments
   const departments = ['Information Technology', 'Engineering', 'Marketing', 'Sales', 'HR', 'Finance', 'Operations'];
+  
+  // Show modal helper
+  const showNotification = (type, title, message) => {
+    setModalConfig({ type, title, message, onConfirm: null });
+    setShowModal(true);
+    if (type === 'success') {
+      setTimeout(() => setShowModal(false), 2000);
+    }
+  };
 
   // Load employees from Firestore (only show non-deleted employees)
   useEffect(() => {
@@ -74,9 +93,10 @@ export default function EmployeeManagementSystem() {
           status: 'active'
         });
         setShowAddForm(false);
+        showNotification('success', 'Success!', 'Employee added successfully!');
       } catch (error) {
         console.error('Error adding employee:', error);
-        alert('Error adding employee. Please try again.');
+        showNotification('error', 'Error', 'Failed to add employee. Please try again.');
       }
     }
   };
@@ -103,9 +123,10 @@ export default function EmployeeManagementSystem() {
           email: '',
           phone: ''
         });
+        showNotification('success', 'Updated!', 'Employee updated successfully!');
       } catch (error) {
         console.error('Error updating employee:', error);
-        alert('Error updating employee. Please try again.');
+        showNotification('error', 'Error', 'Failed to update employee. Please try again.');
       }
     }
   };
@@ -124,20 +145,24 @@ export default function EmployeeManagementSystem() {
 
   // DELETE - Soft delete (mark as deleted but keep in Firestore)
   const deleteEmployee = async (id) => {
-    if (window.confirm('Are you sure you want to delete this employee?')) {
-      try {
-        const employeeRef = doc(db, 'employees', id);
-        // Instead of deleting, mark as deleted and add timestamp
-        await updateDoc(employeeRef, { 
-          deleted: true,
-          deletedAt: new Date().toISOString()
-        });
-        console.log('Employee marked as deleted (data remains in Firestore):', id);
-        // Data will be automatically hidden from UI due to filter in useEffect
-      } catch (error) {
-        console.error('Error deleting employee:', error);
-        alert(`Error deleting employee: ${error.message}`);
-      }
+    setDeleteConfirm({ show: true, id });
+  };
+
+  const confirmDelete = async () => {
+    try {
+      const employeeRef = doc(db, 'employees', deleteConfirm.id);
+      // Instead of deleting, mark as deleted and add timestamp
+      await updateDoc(employeeRef, { 
+        deleted: true,
+        deletedAt: new Date().toISOString()
+      });
+      console.log('Employee marked as deleted (data remains in Firestore):', deleteConfirm.id);
+      setDeleteConfirm({ show: false, id: null });
+      showNotification('success', 'Deleted!', 'Employee removed successfully!');
+    } catch (error) {
+      console.error('Error deleting employee:', error);
+      setDeleteConfirm({ show: false, id: null });
+      showNotification('error', 'Error', 'Failed to delete employee. Please try again.');
     }
   };
 
@@ -147,9 +172,10 @@ export default function EmployeeManagementSystem() {
       const employeeRef = doc(db, 'employees', id);
       const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
       await updateDoc(employeeRef, { status: newStatus });
+      showNotification('success', 'Status Updated!', `Employee status changed to ${newStatus}`);
     } catch (error) {
       console.error('Error updating employee status:', error);
-      alert('Error updating employee status. Please try again.');
+      showNotification('error', 'Error', 'Failed to update status. Please try again.');
     }
   };
 
@@ -417,7 +443,7 @@ export default function EmployeeManagementSystem() {
                   ? "Click the 'Add New Employee' button to get started!" 
                   : `No employees with ${filter} status found.`}
               </p>
-            </div>
+        </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -595,6 +621,73 @@ export default function EmployeeManagementSystem() {
             </div>
           )}
         </div>
+
+        {/* Notification Modal */}
+        {showModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-md transform transition-all animate-slideUp border border-gray-200 dark:border-gray-700">
+              <div className="text-center">
+                {modalConfig.type === 'success' && (
+                  <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 dark:bg-green-900 mb-4">
+                    <span className="text-4xl">✅</span>
+                  </div>
+                )}
+                {modalConfig.type === 'error' && (
+                  <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 dark:bg-red-900 mb-4">
+                    <span className="text-4xl">❌</span>
+                  </div>
+                )}
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                  {modalConfig.title}
+                </h3>
+                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                  {modalConfig.message}
+                </p>
+                {modalConfig.type === 'error' && (
+                  <button
+                    onClick={() => setShowModal(false)}
+                    className="w-full px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold rounded-xl focus:outline-none shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+                  >
+                    OK
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirm.show && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-md transform transition-all animate-slideUp border border-gray-200 dark:border-gray-700">
+              <div className="text-center">
+                <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 dark:bg-red-900 mb-4">
+                  <span className="text-4xl">⚠️</span>
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                  Confirm Delete
+                </h3>
+                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                  Are you sure you want to delete this employee? The data will remain in the database but hidden from view.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setDeleteConfirm({ show: false, id: null })}
+                    className="flex-1 px-6 py-3 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-bold rounded-xl focus:outline-none transform hover:scale-105 transition-all duration-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDelete}
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold rounded-xl focus:outline-none shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
